@@ -1,4 +1,6 @@
 import uuid
+import queue
+from collections import namedtuple, Sequence
 
 
 def wrap_tuple(x):
@@ -180,6 +182,9 @@ class FunctionBase:
 
         """
         derivs = cls.backward(ctx, d_output)
+        # If we just get back a single derivative, make it a list so we can do zip with inputs later
+        if not isinstance(derivs, Sequence):
+            derivs = [derivs]
         ret_variables = []
         for input_val, deriv in zip(inputs, derivs):
             if is_constant(input_val):
@@ -206,5 +211,16 @@ def backpropagate(final_variable_with_deriv):
        final_variable_with_deriv (:class:`VariableWithDeriv`): The final variable
            and its derivative that we want to propagate backward to the leaves.
     """
-    # TODO: Implement for Task 1.4.
-    raise NotImplementedError('Need to implement for Task 1.4')
+    var_queue = queue.Queue()
+    var_queue.put(final_variable_with_deriv)
+    while not var_queue.empty():
+        cur_var_with_deriv = var_queue.get()
+        cur_var, deriv = cur_var_with_deriv.variable, cur_var_with_deriv.deriv
+        if is_leaf(cur_var):
+            cur_var._add_deriv(deriv)
+            continue
+        var_hist = cur_var.history
+        next_vars_with_derivs = var_hist.last_fn.chain_rule(var_hist.ctx, var_hist.inputs, deriv)
+        for var_with_deriv in next_vars_with_derivs:
+            if not is_constant(var_with_deriv.variable):
+                var_queue.put(var_with_deriv)
